@@ -122,8 +122,27 @@ class VaRResponse(BaseModel):
 
 
 class HITLActionRequest(BaseModel):
-    action: str = Field(..., description="APPROVE | REJECT | MODIFY")
+    action: str = Field(..., description="APPROVED | REJECTED | CANCELLED | APPROVE | REJECT | MODIFY")
     reviewer_notes: str | None = None
+    modified_content: str | None = None
+
+
+class HITLApprovalCreateRequest(BaseModel):
+    reason: str
+    evidence: dict[str, Any] | list[Any] = Field(default_factory=dict)
+    model_output: str = ""
+    confidence: float = 1.0
+    proposed_action: str = "rebalance_portfolio"
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    risk_score: float | None = None
+    thread_id: str | None = None
+    agent_run_id: str | None = None
+    expires_in_seconds: int | None = None
+
+
+class HITLResolutionRequest(BaseModel):
+    action: str = Field(..., description="APPROVED | REJECTED | CANCELLED")
+    decision_notes: str | None = None
     modified_content: str | None = None
 
 
@@ -134,9 +153,35 @@ class HITLTaskDto(BaseModel):
     trigger_reason: str
     risk_score: float | None
     status: str
-    original_query: str
-    generated_report_draft: str
+    original_query: str | None = ""
+    generated_report_draft: str | None = ""
     created_at: datetime
+
+
+class HITLTaskDetailDto(BaseModel):
+    id: str
+    task_id: str
+    tenant_id: str
+    user_id: str | None = None
+    thread_id: str
+    agent_run_id: str | None = None
+    trigger_reason: str
+    reason: str
+    evidence: dict[str, Any] | list[Any] = Field(default_factory=dict)
+    model_output: str
+    confidence: float
+    proposed_action: str
+    tool_calls: list[Any] = Field(default_factory=list)
+    risk_score: float | None = None
+    status: str
+    assigned_reviewer_id: str | None = None
+    reviewed_by_id: str | None = None
+    reviewed_at: datetime | None = None
+    reviewer_decision_notes: str | None = None
+    expires_at: datetime | None = None
+    created_at: datetime
+    timestamp: datetime
+    version: int = 1
 
 
 class DocumentCreateDto(BaseModel):

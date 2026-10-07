@@ -1,10 +1,11 @@
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
+from ..domain.exceptions import EntityNotFoundException
 from .specialists.portfolio_agent import PortfolioAgent
 from .specialists.research_agent import ResearchAgent
 from .specialists.risk_agent import RiskAgent
@@ -278,3 +279,40 @@ class AgentOrchestrator:
         """Retrieves checkpoint state for given thread ID."""
         config = {"configurable": {"thread_id": thread_id}}
         return self.graph.get_state(config)
+
+    async def resume_workflow(
+        self,
+        thread_id: str,
+        approval_decision: str,
+        reviewer_notes: str | None = None,
+    ) -> AgentState:
+        """
+        Resumes a paused workflow awaiting human approval from its checkpointer state.
+        If APPROVED: clears termination reason, sets validation_status to APPROVED, and completes workflow.
+        If REJECTED: marks workflow explicitly rejected.
+        """
+        config = {"configurable": {"thread_id": thread_id}}
+        current_state_snapshot = self.graph.get_state(config)
+
+        if not current_state_snapshot or not current_state_snapshot.values:
+            raise EntityNotFoundException("AgentStateCheckpoint", thread_id)
+
+        current_values = dict(current_state_snapshot.values)
+
+        if approval_decision.upper() in {"APPROVED", "APPROVE"}:
+            current_values["termination_reason"] = None
+            current_values["validation_status"] = ValidationStatus.APPROVED.value
+            current_values["validation_feedback"] = f"Human Approval Granted: {reviewer_notes or 'Approved by reviewer.'}"
+            current_values["final_response"] = (
+                f"{current_values.get('final_response', '')} [Human Approval Granted: {reviewer_notes or 'Operation approved.'}]"
+            ).strip()
+            # Update checkpoint state and finalize
+            self.graph.update_state(config, current_values)
+            return cast(AgentState, current_values)
+        else:
+            current_values["termination_reason"] = "REJECTED_BY_HUMAN"
+            current_values["validation_status"] = ValidationStatus.REJECTED.value
+            current_values["final_response"] = f"Operation rejected by human reviewer: {reviewer_notes or 'Rejected.'}"
+            self.graph.update_state(config, current_values)
+            return cast(AgentState, current_values)
+

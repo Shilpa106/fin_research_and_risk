@@ -1,8 +1,10 @@
 import enum
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     Column,
@@ -84,11 +86,21 @@ class IngestionStatus(str, enum.Enum):
 
 
 class HITLReviewStatus(str, enum.Enum):
-    PENDING = "pending"
-    IN_REVIEW = "in_review"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    MODIFIED = "modified"
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+    IN_REVIEW = "IN_REVIEW"
+    MODIFIED = "MODIFIED"
+
+    @classmethod
+    def _missing_(cls, value: object):
+        if isinstance(value, str):
+            for member in cls:
+                if member.value == value.upper():
+                    return member
+        return None
 
 
 class HITLTriggerReason(str, enum.Enum):
@@ -515,15 +527,42 @@ class EvaluationRun(Base, AuditMixin):
     )
 
 
-class HITLReviewTask(Base, AuditMixin):
-    """Human-in-the-Loop review task."""
+class HITLReviewTask(Base, AuditMixin, VersionMixin):
+    """
+    Human-in-the-Loop review and approval task for high-impact financial operations.
+    Enforces role authorization, immutable auditability, and optimistic concurrency versioning.
+    """
     __tablename__ = "hitl_review_tasks"
 
     tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    thread_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    trigger_reason: Mapped[HITLTriggerReason] = mapped_column(Enum(HITLTriggerReason), nullable=False, index=True)
+    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    thread_id: Mapped[str] = mapped_column(String(255), default="default-thread", nullable=False, index=True)
+    agent_run_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("agent_runs.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    trigger_reason: Mapped[HITLTriggerReason] = mapped_column(Enum(HITLTriggerReason), default=HITLTriggerReason.HIGH_RISK_THRESHOLD, nullable=False, index=True)
+    reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    evidence: Mapped[dict[str, Any] | list[Any]] = mapped_column(JSON, default=dict, nullable=False)
+    model_output: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
+    proposed_action: Mapped[str] = mapped_column(String(100), default="rebalance_portfolio", nullable=False)
+    tool_calls: Mapped[list[Any]] = mapped_column(JSON, default=list, nullable=False)
     risk_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    original_query: Mapped[str] = mapped_column(Text, nullable=False)
-    generated_report_draft: Mapped[str] = mapped_column(Text, nullable=False)
+
     status: Mapped[HITLReviewStatus] = mapped_column(Enum(HITLReviewStatus), default=HITLReviewStatus.PENDING, nullable=False, index=True)
+
     assigned_reviewer_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_by_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reviewer_decision_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+
+    # Legacy compatibility fields
+    original_query: Mapped[str | None] = mapped_column(Text, nullable=True)
+    generated_report_draft: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("idx_hitl_tenant_status", "tenant_id", "status"),
+        Index("idx_hitl_tenant_created", "tenant_id", "created_at"),
+        Index("idx_hitl_expires", "expires_at"),
+    )
+

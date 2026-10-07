@@ -7,6 +7,9 @@ from .dtos import (
     HealthComponentStatus,
     HealthResponse,
     HITLActionRequest,
+    HITLApprovalCreateRequest,
+    HITLResolutionRequest,
+    HITLTaskDetailDto,
     HITLTaskDto,
     LivenessResponse,
     LoginRequest,
@@ -38,4 +41,7 @@ __all__ = [
     "VaRResponse",
     "HITLActionRequest",
     "HITLTaskDto",
+    "HITLApprovalCreateRequest",
+    "HITLResolutionRequest",
+    "HITLTaskDetailDto",
 ]
