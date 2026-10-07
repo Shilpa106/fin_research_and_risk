@@ -38,12 +38,17 @@ from .exceptions import (
     AuthenticationException,
     AuthorizationException,
     BaseAppException,
+    CircuitBreakerOpenException,
+    CostLimitExceededException,
     EntityNotFoundException,
     GuardrailViolationException,
     HITLInterruptException,
     OptimisticConcurrencyException,
+    ProviderTimeoutException,
+    ProviderUnavailableException,
     RateLimitExceededException,
     TenantIsolationViolationException,
+    TokenBudgetExceededException,
 )
 
 __all__ = [
@@ -90,4 +95,9 @@ __all__ = [
     "GuardrailViolationException",
     "HITLInterruptException",
     "OptimisticConcurrencyException",
+    "ProviderTimeoutException",
+    "ProviderUnavailableException",
+    "CircuitBreakerOpenException",
+    "TokenBudgetExceededException",
+    "CostLimitExceededException",
 ]

@@ -96,3 +96,54 @@ class OptimisticConcurrencyException(BaseAppException):
             },
         )
 
+
+class ProviderTimeoutException(BaseAppException):
+    def __init__(self, provider: str, model: str, timeout_seconds: float):
+        super().__init__(
+            message=f"Model call to provider '{provider}' (model: '{model}') timed out after {timeout_seconds}s.",
+            status_code=504,
+            error_code="GATEWAY_TIMEOUT",
+            details={"provider": provider, "model": model, "timeout_seconds": timeout_seconds},
+        )
+
+
+class ProviderUnavailableException(BaseAppException):
+    def __init__(self, provider: str, model: str, reason: str = "Service unavailable"):
+        super().__init__(
+            message=f"LLM provider '{provider}' (model: '{model}') is currently unavailable: {reason}",
+            status_code=503,
+            error_code="SERVICE_UNAVAILABLE",
+            details={"provider": provider, "model": model, "reason": reason},
+        )
+
+
+class CircuitBreakerOpenException(BaseAppException):
+    def __init__(self, provider: str, model: str):
+        super().__init__(
+            message=f"Circuit breaker is OPEN for provider '{provider}' (model: '{model}'). Request rejected.",
+            status_code=503,
+            error_code="CIRCUIT_BREAKER_OPEN",
+            details={"provider": provider, "model": model},
+        )
+
+
+class TokenBudgetExceededException(BaseAppException):
+    def __init__(self, tenant_id: str, requested_tokens: int, remaining_budget: int):
+        super().__init__(
+            message=f"Token budget exceeded for tenant '{tenant_id}'. Requested: {requested_tokens}, Remaining: {remaining_budget}.",
+            status_code=429,
+            error_code="TOKEN_BUDGET_EXCEEDED",
+            details={"tenant_id": tenant_id, "requested_tokens": requested_tokens, "remaining_budget": remaining_budget},
+        )
+
+
+class CostLimitExceededException(BaseAppException):
+    def __init__(self, tenant_id: str, accumulated_cost: float, cost_limit: float):
+        super().__init__(
+            message=f"Monthly cost limit of ${cost_limit:.2f} exceeded for tenant '{tenant_id}' (Accumulated: ${accumulated_cost:.2f}).",
+            status_code=429,
+            error_code="COST_LIMIT_EXCEEDED",
+            details={"tenant_id": tenant_id, "accumulated_cost": accumulated_cost, "cost_limit": cost_limit},
+        )
+
+
