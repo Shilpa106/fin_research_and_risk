@@ -43,12 +43,16 @@ from .exceptions import (
     EntityNotFoundException,
     GuardrailViolationException,
     HITLInterruptException,
+    MaliciousInputDetectedException,
     OptimisticConcurrencyException,
     ProviderTimeoutException,
     ProviderUnavailableException,
     RateLimitExceededException,
     TenantIsolationViolationException,
     TokenBudgetExceededException,
+    ToolExecutionTimeoutException,
+    ToolNotFoundException,
+    ToolValidationException,
 )
 
 __all__ = [
@@ -100,4 +104,8 @@ __all__ = [
     "CircuitBreakerOpenException",
     "TokenBudgetExceededException",
     "CostLimitExceededException",
+    "ToolNotFoundException",
+    "ToolValidationException",
+    "ToolExecutionTimeoutException",
+    "MaliciousInputDetectedException",
 ]

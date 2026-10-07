@@ -147,3 +147,44 @@ class CostLimitExceededException(BaseAppException):
         )
 
 
+class ToolNotFoundException(BaseAppException):
+    def __init__(self, tool_name: str):
+        super().__init__(
+            message=f"MCP Tool '{tool_name}' was not found in registered tool catalog.",
+            status_code=404,
+            error_code="TOOL_NOT_FOUND",
+            details={"tool_name": tool_name},
+        )
+
+
+class ToolValidationException(BaseAppException):
+    def __init__(self, tool_name: str, errors: dict[str, Any] | list[Any]):
+        super().__init__(
+            message=f"Schema validation failed for MCP tool '{tool_name}'.",
+            status_code=422,
+            error_code="TOOL_VALIDATION_ERROR",
+            details={"tool_name": tool_name, "validation_errors": errors},
+        )
+
+
+class ToolExecutionTimeoutException(BaseAppException):
+    def __init__(self, tool_name: str, timeout_seconds: float):
+        super().__init__(
+            message=f"Execution of MCP tool '{tool_name}' timed out after {timeout_seconds}s.",
+            status_code=504,
+            error_code="TOOL_EXECUTION_TIMEOUT",
+            details={"tool_name": tool_name, "timeout_seconds": timeout_seconds},
+        )
+
+
+class MaliciousInputDetectedException(BaseAppException):
+    def __init__(self, tool_name: str, violation_type: str, details: str):
+        super().__init__(
+            message=f"Malicious input detected in call to tool '{tool_name}': {violation_type}",
+            status_code=400,
+            error_code="MALICIOUS_INPUT_DETECTED",
+            details={"tool_name": tool_name, "violation_type": violation_type, "evidence": details},
+        )
+
+
+
