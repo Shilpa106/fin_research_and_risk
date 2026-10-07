@@ -1,3 +1,3 @@
-"""
-Events Module - Kafka event schemas, publisher abstractions, and consumer pipelines.
-"""
+from .document_events import DocumentLifecycleEvent, DocumentUploadedEvent
+
+__all__ = ["DocumentUploadedEvent", "DocumentLifecycleEvent"]

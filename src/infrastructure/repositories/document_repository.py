@@ -119,6 +119,7 @@ class DocumentRepository:
         s3_raw_uri: str = "s3://default/path",
         file_size_bytes: int = 0,
         company_name: str | None = None,
+        status: IngestionStatus = IngestionStatus.UPLOADED,
     ) -> Document:
         """Persists a new document with mandatory tenant_id attribution and initial version."""
         doc = Document(
@@ -133,7 +134,7 @@ class DocumentRepository:
             content_hash=content_hash,
             s3_raw_uri=s3_raw_uri,
             file_size_bytes=file_size_bytes,
-            status=IngestionStatus.INDEXED,
+            status=status,
             version=1,
             is_deleted=False,
         )
@@ -149,7 +150,7 @@ class DocumentRepository:
             content_hash=content_hash,
             file_size_bytes=file_size_bytes,
             chunk_count=doc.chunk_count,
-            status=IngestionStatus.INDEXED,
+            status=status,
             change_summary="Initial document ingestion",
         )
         self.session.add(initial_version)

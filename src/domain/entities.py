@@ -72,10 +72,15 @@ class DocumentType(str, enum.Enum):
 
 
 class IngestionStatus(str, enum.Enum):
-    PENDING = "pending"
-    PROCESSING = "processing"
-    INDEXED = "indexed"
-    FAILED = "failed"
+    UPLOADED = "UPLOADED"
+    PROCESSING = "PROCESSING"
+    EXTRACTED = "EXTRACTED"
+    CHUNKED = "CHUNKED"
+    EMBEDDING = "EMBEDDING"
+    INDEXED = "INDEXED"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    PENDING = "PENDING"
 
 
 class HITLReviewStatus(str, enum.Enum):
@@ -292,7 +297,8 @@ class Document(Base, AuditMixin, SoftDeleteMixin, VersionMixin):
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     chunk_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    status: Mapped[IngestionStatus] = mapped_column(Enum(IngestionStatus), default=IngestionStatus.INDEXED, nullable=False)
+    status: Mapped[IngestionStatus] = mapped_column(Enum(IngestionStatus), default=IngestionStatus.UPLOADED, nullable=False)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     current_version_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="documents")
@@ -321,7 +327,8 @@ class DocumentVersion(Base, AuditMixin):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     chunk_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    status: Mapped[IngestionStatus] = mapped_column(Enum(IngestionStatus), default=IngestionStatus.INDEXED, nullable=False)
+    status: Mapped[IngestionStatus] = mapped_column(Enum(IngestionStatus), default=IngestionStatus.UPLOADED, nullable=False)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     change_summary: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     document: Mapped["Document"] = relationship("Document", back_populates="versions")

@@ -1,3 +1,3 @@
-"""
-Workers Module - Asynchronous background tasks, SEC filing batch processing, and embedding workers.
-"""
+from .ingestion_worker import IngestionWorker
+
+__all__ = ["IngestionWorker"]
