@@ -1,0 +1,152 @@
+version: "3.9"
+
+services:
+  # ----------------------------------------------------------------------------
+  # FastAPI Application Service
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: financial_copilot_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=development
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres_dev_password@postgres:5432/financial_copilot_db
+      - REDIS_URL=redis://redis:6379/0
+      - OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_PORT=9200
+      - OPENSEARCH_USE_SSL=false
+      - JWT_SECRET_KEY=dev-only-secret-key-replace-in-production-vault
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - copilot_net
+
+  # ----------------------------------------------------------------------------
+  # PostgreSQL Relational Database (Multi-Tenant RLS)
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: financial_copilot_postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres_dev_password
+      - POSTGRES_DB=financial_copilot_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d financial_copilot_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - copilot_net
+
+  # ----------------------------------------------------------------------------
+  # Redis (Token-Bucket Rate Limiting & Semantic Cache)
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7.2-alpine
+    container_name: financial_copilot_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - copilot_net
+
+  # ----------------------------------------------------------------------------
+  # OpenSearch (Hybrid Vector & BM25 Search Engine)
+  # ----------------------------------------------------------------------------
+  opensearch:
+    image: opensearchproject/opensearch:2.15.0
+    container_name: financial_copilot_opensearch
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    environment:
+      - cluster.name=financial-copilot-cluster
+      - node.name=dev-node-1
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - DISABLE_SECURITY_PLUGIN=true
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    networks:
+      - copilot_net
+
+  # ----------------------------------------------------------------------------
+  # MinIO (S3-Compatible Local Object Storage for Raw SEC Filings)
+  # ----------------------------------------------------------------------------
+  minio:
+    image: minio/minio:RELEASE.2024-05-10T01-41-38Z
+    container_name: financial_copilot_minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadminpassword
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - copilot_net
+
+volumes:
+  postgres_data:
+  redis_data:
+  opensearch_data:
+  minio_data:
+
+networks:
+  copilot_net:
+    driver: bridge
