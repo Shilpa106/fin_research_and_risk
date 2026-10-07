@@ -10,6 +10,15 @@ from .auth import (
     verify_password,
 )
 from .context import RequestSecurityContext
+from .guardrails import (
+    AgentSecurityGuard,
+    DataClassification,
+    GenAISecurityManager,
+    InputSecurityGuard,
+    OutputSecurityGuard,
+    RetrievalSecurityGuard,
+    SecurityViolationType,
+)
 from .guards import (
     get_security_context,
     require_permissions,
@@ -42,4 +51,11 @@ __all__ = [
     "get_security_context",
     "require_permissions",
     "require_roles",
+    "GenAISecurityManager",
+    "InputSecurityGuard",
+    "RetrievalSecurityGuard",
+    "AgentSecurityGuard",
+    "OutputSecurityGuard",
+    "DataClassification",
+    "SecurityViolationType",
 ]
