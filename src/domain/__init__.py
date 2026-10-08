@@ -53,6 +53,7 @@ from .exceptions import (
     ToolExecutionTimeoutException,
     ToolNotFoundException,
     ToolValidationException,
+    EvaluationRegressionException,
 )
 
 __all__ = [
@@ -108,4 +109,5 @@ __all__ = [
     "ToolValidationException",
     "ToolExecutionTimeoutException",
     "MaliciousInputDetectedException",
+    "EvaluationRegressionException",
 ]

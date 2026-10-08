@@ -22,30 +22,26 @@ class SupervisorAgent:
         query = state.get("user_request", "").lower()
         active_specialists: list[str] = []
 
+        import re
+
+        def _has_word(words: list[str]) -> bool:
+            return any(re.search(r"\b" + re.escape(w) + r"\b", query) for w in words)
+
         # 1. Intent Detection Heuristics
-        # Research needed: company filings, fundamentals, earnings, transcripts, macro data
-        needs_research = any(
-            k in query for k in [
-                "research", "apple", "microsoft", "nvda", "10-k", "10k", "10-q", "earnings",
-                "revenue", "ebitda", "transcript", "filing", "growth", "margin", "sec",
-            ]
-        ) or not ("var" in query or "portfolio" in query)
+        needs_research = _has_word([
+            "research", "apple", "microsoft", "nvda", "10-k", "10k", "10-q", "earnings",
+            "revenue", "ebitda", "transcript", "filing", "growth", "margin", "sec", "sales", "iphone", "azure", "cloud",
+        ]) or (not _has_word(["var", "portfolio", "holdings", "allocation", "concentration"]))
 
-        # Risk needed: VaR, stress tests, volatility, drawdown, tail risk, credit exposure
-        needs_risk = any(
-            k in query for k in [
-                "risk", "var", "value at risk", "stress", "scenario", "volatility",
-                "drawdown", "liquidity", "tail risk", "limit", "exposure", "credit",
-            ]
-        )
+        needs_risk = _has_word([
+            "risk", "var", "value at risk", "value-at-risk", "stress", "scenario", "volatility",
+            "drawdown", "liquidity", "tail risk", "limit", "leverage", "override",
+        ])
 
-        # Portfolio needed: holdings, allocation, rebalancing, concentration, portfolio metrics
-        needs_portfolio = any(
-            k in query for k in [
-                "portfolio", "holding", "holdings", "allocation", "weight", "rebalance",
-                "concentration", "benchmark", "alpha", "beta", "fund",
-            ]
-        )
+        needs_portfolio = _has_word([
+            "holdings", "holding", "allocation", "weight", "rebalance",
+            "concentration", "benchmark", "alpha", "beta", "fund", "sector",
+        ]) or ("portfolio" in query and not needs_risk)
 
         if needs_research:
             active_specialists.append("research_agent")

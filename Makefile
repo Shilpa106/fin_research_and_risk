@@ -1,4 +1,4 @@
-.PHONY: help install dev test lint format typecheck up down clean
+.PHONY: help install dev test eval lint format typecheck up down clean
 
 PYTHON ?= python
 UVICORN ?= uvicorn
@@ -10,6 +10,7 @@ help:
 	@echo "  make install     - Install pinned production and dev dependencies"
 	@echo "  make dev         - Run local development server with hot-reload"
 	@echo "  make test        - Run test suite via pytest"
+	@echo "  make eval        - Run GenAI evaluation benchmark and CI regression gate"
 	@echo "  make lint        - Run linting checks using Ruff"
 	@echo "  make format      - Format source files using Ruff"
 	@echo "  make typecheck   - Run static type checking using Mypy"
@@ -27,6 +28,9 @@ dev:
 
 test:
 	$(PYTHON) -m pytest -v
+
+eval:
+	$(PYTHON) -m src.evaluation.cli --fail-on-regression
 
 lint:
 	$(PYTHON) -m ruff check src/ tests/

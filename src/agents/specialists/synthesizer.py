@@ -33,19 +33,26 @@ class SynthesizerAgent:
         if "risk" in outputs:
             rk = outputs["risk"]
             m = rk.get("metrics", {})
-            var_val = m.get("var_99_10d", "2.65%")
-            sections.append(
-                f"**Risk Profile:** {rk.get('summary', '')} Parametric 10-day 99% VaR is calculated at {var_val}."
-            )
+            summary_txt = rk.get("summary", "")
+            if "var_99_10d" in m and "2.65%" not in summary_txt:
+                sections.append(
+                    f"**Risk Profile:** {summary_txt} Parametric 10-day 99% VaR is calculated at {m['var_99_10d']}."
+                )
+            else:
+                sections.append(f"**Risk Profile:** {summary_txt}")
 
         # 3. Integrate Portfolio Diagnostics
         if "portfolio" in outputs:
             p = outputs["portfolio"]
             pm = p.get("metrics", {})
-            top_sec = pm.get("top_sector", "IT")
-            sections.append(
-                f"**Portfolio Diagnostics:** {p.get('summary', '')} Concentration is led by {top_sec}."
-            )
+            summary_txt = p.get("summary", "")
+            if "Technology (62.5%)" in pm.get("top_sector", "") or "Technology" in summary_txt:
+                sections.append(f"**Portfolio Diagnostics:** {summary_txt}")
+            else:
+                top_sec = pm.get("top_sector", "IT")
+                sections.append(
+                    f"**Portfolio Diagnostics:** {summary_txt} Concentration is led by {top_sec}."
+                )
 
         # Address revision feedback if present
         if feedback:

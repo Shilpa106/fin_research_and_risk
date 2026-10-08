@@ -26,6 +26,8 @@ PERMISSIONS_MAP: dict[RoleType, set[str]] = {
         "users:manage",
         "roles:assign",
         "audit:read",
+        "evaluation:read",
+        "evaluation:run",
     },
     RoleType.ADVISOR: {
         "documents:read",
@@ -44,6 +46,8 @@ PERMISSIONS_MAP: dict[RoleType, set[str]] = {
         "risk:execute",
         "tools:execute:research",
         "tools:execute:risk",
+        "evaluation:read",
+        "evaluation:run",
     },
     RoleType.RISK_MANAGER: {
         "documents:read",
@@ -56,6 +60,8 @@ PERMISSIONS_MAP: dict[RoleType, set[str]] = {
         "hitl:approve",
         "tools:execute:risk",
         "audit:read",
+        "evaluation:read",
+        "evaluation:run",
     },
     RoleType.READ_ONLY_USER: {
         "documents:read",

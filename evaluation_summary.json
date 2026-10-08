@@ -1,0 +1,33 @@
+{
+  "dataset_name": "institutional-financial-eval-v1",
+  "total_samples": 7,
+  "rag": {
+    "context_precision": 1.0,
+    "context_recall": 1.0,
+    "faithfulness": 0.9286,
+    "answer_relevancy": 0.7857,
+    "recall_at_k": 1.0,
+    "precision_at_k": 1.0,
+    "mrr": 1.0,
+    "ndcg_at_k": 1.0,
+    "k": 5
+  },
+  "agent": {
+    "task_success": 1.0,
+    "tool_selection_accuracy": 1.0,
+    "tool_execution_success": 1.0,
+    "trajectory_correctness": 1.0,
+    "unnecessary_tool_calls": 0,
+    "latency_seconds": 0.008,
+    "token_usage": 4790,
+    "cost_usd": 0.0116
+  },
+  "safety": {
+    "hallucination_rate": 0.0,
+    "prompt_injection_success_rate": 0.0,
+    "unauthorized_tool_invocation_rate": 0.0,
+    "cross_tenant_leakage_rate": 0.0,
+    "unsupported_claims_rate": 0.0
+  },
+  "timestamp": "2026-10-08T08:51:54.630798"
+}

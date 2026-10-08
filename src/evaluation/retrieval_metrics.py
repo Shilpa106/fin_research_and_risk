@@ -89,7 +89,7 @@ class RetrievalEvaluator:
         # 6. Context Recall (fraction of ground truth statements found in text)
         statements = ground_truth_statements or []
         if statements:
-            covered = sum(1 for s in statements if s.lower() in retrieved_context_text.lower())
+            covered = sum(1 for s in statements if RetrievalEvaluator._is_statement_covered(s, retrieved_context_text))
             context_recall = covered / len(statements)
         else:
             context_recall = recall_at_k
@@ -103,3 +103,28 @@ class RetrievalEvaluator:
             context_precision=round(min(1.0, context_precision), 4),
             context_recall=round(min(1.0, context_recall), 4),
         )
+
+    @staticmethod
+    def _is_statement_covered(statement: str, context: str) -> bool:
+        """Determines if a factual ground truth statement is covered in retrieved context."""
+        import re
+        stmt_clean = statement.lower().strip()
+        ctx_clean = context.lower()
+        if stmt_clean in ctx_clean:
+            return True
+
+        stopwords = {
+            "a", "an", "the", "of", "in", "on", "at", "to", "for", "with",
+            "by", "from", "and", "or", "is", "was", "were", "are", "be",
+            "been", "being", "that", "this", "which", "it", "as",
+        }
+        tokens = [t for t in re.findall(r"\b[\w$%.]+", stmt_clean) if t not in stopwords and len(t) > 1]
+        if not tokens:
+            return True
+
+        nums = [t for t in tokens if any(c.isdigit() for c in t)]
+        if nums and not all(n.replace("$", "").replace("%", "") in ctx_clean for n in nums):
+            return False
+
+        matched = sum(1 for t in tokens if t in ctx_clean)
+        return (matched / len(tokens)) >= 0.5

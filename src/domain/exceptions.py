@@ -187,4 +187,15 @@ class MaliciousInputDetectedException(BaseAppException):
         )
 
 
+class EvaluationRegressionException(BaseAppException):
+    def __init__(self, message: str, breaches: list[dict[str, Any]] | None = None):
+        super().__init__(
+            message=message,
+            status_code=422,
+            error_code="EVALUATION_REGRESSION_DETECTED",
+            details={"breaches": breaches or []},
+        )
+
+
+
 

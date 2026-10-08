@@ -1,3 +1,3 @@
-from . import copilot, health, hitl, research, risk
+from . import auth, copilot, evaluation, health, hitl, research, risk
 
-__all__ = ["health", "copilot", "research", "risk", "hitl"]
+__all__ = ["auth", "health", "copilot", "research", "risk", "hitl", "evaluation"]
