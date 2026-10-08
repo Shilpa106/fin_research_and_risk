@@ -76,8 +76,24 @@ class AppSettings(BaseSettings):
 
     # Observability & Metrics
     otel_service_name: str = "financial-research-copilot"
+    otel_enabled: bool = True
     otel_exporter_otlp_endpoint: str | None = None
     prometheus_metrics_enabled: bool = True
+
+    # CloudWatch & LangSmith Integrations
+    cloudwatch_enabled: bool = False
+    cloudwatch_log_group: str = "/aws/ecs/financial-research-copilot"
+    cloudwatch_namespace: str = "EnterpriseFinCopilot"
+    langsmith_enabled: bool = False
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    langsmith_api_key: SecretStr | None = None
+    langsmith_project: str = "enterprise-fin-copilot"
+
+    # Enterprise Alerting & Notifications
+    alerting_enabled: bool = True
+    alert_eval_interval_seconds: int = 30
+    pagerduty_routing_key: SecretStr | None = None
+    slack_webhook_url: SecretStr | None = None
 
     @field_validator("app_env")
     @classmethod

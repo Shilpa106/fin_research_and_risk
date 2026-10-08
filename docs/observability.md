@@ -1,114 +1,207 @@
-# Enterprise Financial Research & Risk Copilot — Observability & Telemetry
+# Enterprise Financial Research & Risk Copilot — Observability & Telemetry (Phase 13)
 
 ## 1. Observability Architecture & Standards
 
-Observability is implemented using the **OpenTelemetry (OTel)** open standard to avoid vendor lock-in and enable seamless telemetry ingestion into Amazon Managed Prometheus, Amazon CloudWatch, Jaeger, and Datadog.
+Enterprise Observability is implemented using the **OpenTelemetry (OTel)** open standard with zero vendor lock-in, enabling seamless telemetry ingestion into Amazon Managed Prometheus, Amazon CloudWatch, LangSmith, Jaeger, and Datadog.
 
 ```mermaid
 flowchart TD
     subgraph Services["Instrumented Microservices"]
-        FastAPI["FastAPI Ingress Fleet"]
-        LangGraph["LangGraph Agent Runtime"]
-        RetSvc["OpenSearch Hybrid Retrieval"]
+        FastAPI["FastAPI Ingress Fleet & Correlation Middleware"]
+        LangGraph["LangGraph Multi-Agent Orchestrator"]
+        RetSvc["Hybrid RAG Retrieval Engine"]
         AIGateway["Centralized AI Gateway"]
-        Workers["Kafka Ingestion Workers"]
+        InfraCol["System & Database Infrastructure Collector"]
     end
 
-    subgraph OTelFleet["Telemetry Collection Tier"]
-        OTelSidecar["OpenTelemetry Collector Daemonset / Sidecars"]
+    subgraph CoreTelemetry["In-Process Observability Subsystem"]
+        Context["W3C TraceContext & Request Lineage"]
+        Sanitizer["Zero-Leakage Security & PII Sanitizer"]
+        Tracer["OpenTelemetry Tracer & Spans"]
+        Registry["Enterprise Metrics Registry"]
+        Alerts["Alerting Engine & Anomaly Detector"]
     end
 
     subgraph Backends["Observability Backends"]
-        Prometheus["Amazon Managed Prometheus (Metrics)"]
-        Grafana["Amazon Managed Grafana (Dashboards)"]
-        XRay["AWS X-Ray / Jaeger (Distributed Traces)"]
-        CloudWatchLogs["CloudWatch Logs / S3 WORM (Logs)"]
+        Prometheus["Prometheus Exposition (/metrics)"]
+        CloudWatch["AWS CloudWatch PutMetricData (Configurable)"]
+        LangSmith["LangSmith Traces & Runs (Configurable)"]
+        StructuredLogs["JSON Logs with Request Lineage"]
     end
 
-    FastAPI -->|OTLP gRPC| OTelSidecar
-    LangGraph -->|OTLP gRPC| OTelSidecar
-    RetSvc -->|OTLP gRPC| OTelSidecar
-    AIGateway -->|OTLP gRPC| OTelSidecar
-    Workers -->|OTLP gRPC| OTelSidecar
+    FastAPI --> Context
+    FastAPI --> Tracer
+    FastAPI --> Registry
+    RetSvc --> Tracer
+    RetSvc --> Registry
+    LangGraph --> Tracer
+    LangGraph --> Registry
+    AIGateway --> Registry
+    AIGateway --> LangSmith
+    InfraCol --> Registry
 
-    OTelSidecar --> Prometheus
-    Prometheus --> Grafana
-    OTelSidecar --> XRay
-    OTelSidecar --> CloudWatchLogs
+    Registry --> Alerts
+    Registry --> Prometheus
+    Registry --> CloudWatch
+    Tracer --> StructuredLogs
+    Context --> Sanitizer --> StructuredLogs
 ```
 
 ---
 
-## 2. Distributed Tracing & W3C TraceContext
+## 2. Request Context Propagation & Distributed Tracing
 
-Every client request is assigned a unique W3C `traceparent` header at CloudFront/ALB, propagated through all downstream systems:
-```
+Every request across the platform supports complete transaction lineage:
+- `request_id` / `correlation_id`
+- `trace_id` (32-character hexadecimal W3C compliant)
+- `tenant_id`
+- `user_id`
+- `conversation_id`
+- `agent_run_id`
+
+### W3C TraceContext Standard
+Every HTTP client request receives and propagates standard W3C `traceparent` headers:
+```http
 traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+X-Request-ID: req-018f92a3-b4cd-7011-8292-123456789abc
+X-Correlation-ID: req-018f92a3-b4cd-7011-8292-123456789abc
+X-Trace-ID: 4bf92f3577b34da6a3ce929d0e0e4736
 ```
 
-### Trace Span Hierarchy for a Financial Copilot Query:
-1. `HTTP POST /api/v1/copilot/chat` (FastAPI Server Span)
-   - `auth.validate_jwt` (Span)
-   - `ratelimit.check_token_bucket` (Redis Span)
-   - `ai_gateway.semantic_cache_lookup` (Redis Vector Search Span)
-   - `langgraph.workflow_execution` (Agent Runtime Span)
-     - `node.router` (Haiku Triage Span)
-     - `node.research` (RAG Retrieval Span)
-       - `opensearch.hybrid_search` (OpenSearch Client Span)
-       - `opensearch.knn_query` (OpenSearch Index Span)
-     - `node.risk_model` (Quantitative Calculation Span)
-       - `mcp.market_data_quote` (MCP JSON-RPC Span)
-     - `node.synthesis` (Sonnet LLM Generation Span)
-       - `bedrock.invoke_model` (Bedrock Client Span)
-     - `node.guardrails` (Bedrock Guardrail Check Span)
-     - `node.hitl_decision` (State Gate Span)
+### Trace Span Hierarchy
+```
+HTTP POST /api/v1/copilot/chat [SERVER Span]
+  ├── auth.validate_jwt [INTERNAL Span]
+  ├── ratelimit.check_bucket [INTERNAL Span]
+  ├── rag.hybrid_search [INTERNAL Span]
+  │     ├── opensearch.hybrid_query
+  │     └── opensearch.vector_knn
+  ├── rag.reranker [INTERNAL Span]
+  ├── agent.orchestrator [INTERNAL Span]
+  │     ├── node.supervisor
+  │     ├── node.research_agent
+  │     │     └── mcp.tool.search_research
+  │     ├── node.risk_agent
+  │     │     └── mcp.tool.get_volatility
+  │     └── node.synthesizer
+  └── llm.bedrock.claude-3-5-sonnet [CLIENT Span]
+```
 
 ---
 
-## 3. Metrics Catalog & Golden Signals
+## 3. Zero-Leakage Privacy & Financial Data Scrubbing
 
-Metrics are emitted via Prometheus client libraries and scraped every 15 seconds.
+> [!CAUTION]
+> **Zero-Leakage Policy:** Secrets, credentials, and sensitive financial/personal data must NEVER appear in logs or telemetry.
 
-### 3.1 Golden Signals & API Metrics
-| Metric Name | Type | Labels | Description |
-| :--- | :--- | :--- | :--- |
-| `http_requests_total` | Counter | `method`, `endpoint`, `status`, `tenant_id` | Total API requests processed (Target: 10K RPS) |
-| `http_request_duration_seconds` | Histogram | `endpoint`, `status` | Request latency distribution (P50, P90, P95, P99) |
-| `http_active_connections` | Gauge | `protocol` | Active HTTP/2 and WebSocket concurrent connections |
-| `rate_limit_exceeded_total` | Counter | `tenant_id`, `tier` | Total HTTP 429 rate limit rejections |
-
-### 3.2 AI Gateway & LLM Metrics
-| Metric Name | Type | Labels | Description |
-| :--- | :--- | :--- | :--- |
-| `ai_gateway_requests_total` | Counter | `model_id`, `tier`, `tenant_id` | Total LLM invocations |
-| `ai_gateway_time_to_first_token_seconds` | Histogram | `model_id` | TTFT latency (Target: < 800ms) |
-| `ai_gateway_tokens_consumed_total` | Counter | `model_id`, `token_type`, `tenant_id` | Token accounting (`prompt`, `completion`, `embedding`) |
-| `ai_gateway_semantic_cache_hits_total` | Counter | `tenant_id` | Semantic cache intercept count (Target: 35%+) |
-| `ai_gateway_circuit_breaker_tripped_total` | Counter | `model_id`, `region` | Circuit breaker trips indicating Bedrock instability |
-
-### 3.3 Retrieval & OpenSearch Metrics
-| Metric Name | Type | Labels | Description |
-| :--- | :--- | :--- | :--- |
-| `opensearch_hybrid_search_duration_seconds` | Histogram | `tenant_id` | Query latency across 1B+ chunks (Target: < 50ms) |
-| `opensearch_hits_count` | Histogram | `doc_type` | Number of candidate chunks returned per query |
-| `opensearch_top_score` | Histogram | `query_type` | Max cosine similarity score returned |
-
-### 3.4 Human-In-The-Loop (HITL) Metrics
-| Metric Name | Type | Labels | Description |
-| :--- | :--- | :--- | :--- |
-| `hitl_tasks_created_total` | Counter | `tenant_id`, `reason` | Total HITL interrupt review tasks created |
-| `hitl_tasks_pending_gauge` | Gauge | `tenant_id` | Current queue depth of awaiting review tasks |
-| `hitl_review_duration_seconds` | Histogram | `reviewer_role` | Time from interrupt to human resolution |
+The `src.observability.sanitizer` module provides automatic recursive scrubbing for:
+1. **Credentials & Secrets**:
+   - Bearer tokens (`Bearer eyJ...`) $\rightarrow$ `[REDACTED_BEARER_TOKEN]`
+   - Raw JWT signatures $\rightarrow$ `[REDACTED_JWT]`
+   - AWS Access Keys (`AKIA...`) $\rightarrow$ `[REDACTED_AWS_KEY]`
+   - Key-value secrets (`api_key`, `secret_key`, `password`, `pwd`) $\rightarrow$ `[REDACTED_SECRET]`
+2. **Payment & Financial PII**:
+   - Primary Account Numbers (13-19 digit PAN card numbers) $\rightarrow$ `[REDACTED_PAN]`
+   - Social Security Numbers (`XXX-XX-XXXX`) $\rightarrow$ `[REDACTED_SSN]`
+   - International Bank Account Numbers (IBAN) $\rightarrow$ `[REDACTED_IBAN]`
+   - Bank Account / Routing numbers $\rightarrow$ `[REDACTED_ACCOUNT]`
 
 ---
 
-## 4. Alerting Thresholds & PagerDuty Integration
+## 4. Complete Operational Metrics Catalog
 
-| Severity | Alert Rule | Condition | Action |
+Metrics are tracked continuously in the thread-safe `EnterpriseMetricsRegistry`:
+
+### 4.1 API Golden Signals
+- **RPS (Requests Per Second)**: 60-second sliding window rate.
+- **P50, P90, P95, P99 Latency (ms)**: Rolling reservoir quantile distribution.
+- **Error Rate**: Ratio of HTTP 5xx/4xx responses to total requests.
+- **In-Flight Requests**: Active concurrent HTTP request gauge.
+
+### 4.2 Hybrid RAG Retrieval Metrics
+- **Retrieval Latency (ms)**: OpenSearch vector + BM25 fusion execution duration.
+- **Reranker Latency (ms)**: Cross-encoder semantic score ranking latency.
+- **Recall@K**: Proportion of known ground-truth chunks retrieved.
+- **Semantic Cache Hit Ratio**: $\frac{\text{Hits}}{\text{Hits} + \text{Misses}}$ intercept efficiency.
+
+### 4.3 Multi-Agent Orchestration Metrics
+- **Execution Time (seconds)**: LangGraph state graph completion duration.
+- **Iterations**: Number of specialist reasoning loops executed.
+- **Tool Calls**: Aggregate volume of MCP tools executed.
+- **Success Rate**: Ratio of workflows completing with `APPROVED` validation.
+- **Failure Rate**: Ratio of workflows aborted due to budget, timeout, or errors.
+
+### 4.4 LLM Accounting & Performance Metrics
+- **Model & Provider**: Dimension labels (e.g. `anthropic.claude-3-5-sonnet`, `bedrock`).
+- **Input Tokens & Output Tokens**: Exact prompt and completion token counters.
+- **Latency (ms)**: Foundation model API turnaround duration.
+- **Cost (USD)**: Dollar expenditure computed using token pricing models.
+
+### 4.5 System & Infrastructure Metrics
+- **CPU Utilization (%)**: Host processor usage.
+- **Memory (Bytes / %)**: Process RSS and host memory consumption.
+- **Queue Depth**: Pending background tasks, worker tasks, and HITL reviews.
+- **Database Connection Pool**: Active checked-out connections, pool size, overflow.
+- **OpenSearch Latency (ms)**: Health ping and query latency.
+
+---
+
+## 5. Health Checks & Diagnostic Probes
+
+| Route | Probe Purpose | Verification Scope | Status Codes |
 | :--- | :--- | :--- | :--- |
-| **P1 - CRITICAL** | API Error Rate Spike | HTTP 5xx rate $> 1.0\%$ for 3 mins | PagerDuty SRE on-call immediate page |
-| **P1 - CRITICAL** | OpenSearch Node Quorum Loss | Cluster status = RED | Immediate automated cluster restore & SRE page |
-| **P2 - HIGH** | P99 API Latency Degradation | P99 latency $> 500\text{ ms}$ for 5 mins | Auto-scale ECS fleet; notify backend engineers |
-| **P2 - HIGH** | Bedrock Circuit Breaker Open | AI Gateway failover rate $> 5\%$ for 5 mins | Engage AWS Bedrock TAM / Regional failover |
-| **P3 - MEDIUM** | HITL Backlog Queue Buildup | Pending HITL tasks $> 50$ for $> 30$ mins | Slack alert to Senior Risk Officers |
-| **P3 - MEDIUM** | Semantic Cache Miss Surge | Cache hit ratio $< 15\%$ over 2 hours | Inspect query distribution drift |
+| `GET /health` | Basic Health | Service name, version, and environment. | `200 OK` |
+| `GET /health/live` | K8s / ECS Liveness | Process run state. | `200 OK` |
+| `GET /health/ready` | ALB Readiness | PostgreSQL database and Redis cluster pings. | `200 OK` or `503 Service Unavailable` |
+| `GET /health/deep` | Deep Diagnostics | Database pool, Redis, OpenSearch, System CPU/Memory, Queue Depth, and telemetry snapshot. | `200 OK` or `503 Service Unavailable` |
+| `GET /metrics` | Prometheus Scrape | Prometheus exposition format `# HELP`, `# TYPE`, and key-value lines. Supports `?format=json`. | `200 OK` |
+
+---
+
+## 6. Enterprise Alerting Engine
+
+The built-in alerting engine monitors metrics against institutional thresholds and manages alert state transitions (`OK` $\rightarrow$ `FIRING` $\rightarrow$ `RESOLVED`):
+
+| Severity | Alert Rule | Trigger Condition | Notification Target |
+| :--- | :--- | :--- | :--- |
+| **P1 - CRITICAL** | `API_ERROR_RATE_SPIKE` | Error rate $> 1.0\%$ | PagerDuty SRE on-call immediate page |
+| **P1 - CRITICAL** | `OPENSEARCH_LATENCY_SPIKE` | OpenSearch P95 latency $> 1000\text{ ms}$ | Database & Storage On-Call |
+| **P2 - HIGH** | `API_P99_LATENCY_DEGRADATION` | API P99 latency $> 2000\text{ ms}$ | Auto-scaling alerts & Slack |
+| **P2 - HIGH** | `AGENT_FAILURE_RATE_SPIKE` | Agent failure rate $> 15\%$ | AI Platform Engineering |
+| **P2 - HIGH** | `HIGH_MEMORY_PRESSURE` | System memory usage $> 90\%$ | Host Infrastructure Team |
+| **P3 - MEDIUM** | `QUEUE_DEPTH_BACKLOG` | Pending queue depth $> 50$ items | Operations & Reviewer Team |
+
+---
+
+## 7. CloudWatch & LangSmith Integrations
+
+Managed through `AppSettings` configuration flags:
+
+```bash
+# Enable AWS CloudWatch Metrics Exporter
+CLOUDWATCH_ENABLED=true
+CLOUDWATCH_NAMESPACE=EnterpriseFinCopilot
+
+# Enable LangSmith Tracing
+LANGSMITH_ENABLED=true
+LANGSMITH_PROJECT=enterprise-fin-copilot
+LANGSMITH_API_KEY=lsv2_pt_...
+```
+
+- **CloudWatch Exporter**: Generates `MetricDatum` objects compatible with the AWS SDK `PutMetricData` API.
+- **LangSmith Exporter**: Captures LLM calls and LangGraph agent runs into LangSmith-compatible run payloads.
+
+---
+
+## 8. Observability REST API Reference
+
+Authenticated endpoints under `/api/v1/observability`:
+
+| Method | Endpoint | Required Permission | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/observability/metrics/summary` | `observability:read` | Returns full categorized metrics snapshot (API, RAG, Agent, LLM, Infrastructure). |
+| `GET` | `/api/v1/observability/alerts` | `observability:read` | Lists active and historical alert incidents. |
+| `POST` | `/api/v1/observability/alerts/evaluate` | `observability:manage` | Manually triggers an evaluation cycle across all rules. |
+| `GET` | `/api/v1/observability/traces` | `observability:read` | Returns recent distributed trace spans in memory. |
+| `GET` | `/api/v1/observability/cloudwatch/preview` | `observability:read` | Previews CloudWatch `PutMetricData` payloads. |
+| `GET` | `/api/v1/observability/langsmith/runs` | `observability:read` | Retrieves captured LangSmith run traces. |

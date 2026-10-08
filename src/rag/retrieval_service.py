@@ -4,6 +4,8 @@ from typing import Any
 
 from ..domain.exceptions import TenantIsolationViolationException
 from ..interfaces.embedding import EmbeddingProvider
+from ..observability.metrics import metrics_registry
+from ..observability.tracing import SpanKind, default_tracer
 from .chunking import FinancialChunk
 from .citations import AssembledContext, Citation, CitationTracker
 from .embeddings import get_embedding_provider
@@ -99,24 +101,38 @@ class RetrievalService:
         query_vector = await self.embedding_provider.embed_query(processed.rewritten_query)
 
         # Step 5, 6, 7: Vector Retrieval + BM25 Retrieval + Result Fusion
-        fused_hits: list[SearchHit] = self.store.hybrid_search(
-            tenant_id=tenant_id,
-            query_text=processed.rewritten_query,
-            query_vector=query_vector,
-            top_k=top_k * 3,  # Over-fetch for reranking and deduplication
-            alpha=alpha,
-            tickers=tickers,
-            doc_types=doc_types,
-            fiscal_years=fiscal_years,
-            user_permissions=user_permissions,
-        )
+        retrieval_start = time.perf_counter()
+        with default_tracer.start_as_current_span(
+            "rag.hybrid_search",
+            kind=SpanKind.INTERNAL,
+            attributes={"rag.query": processed.rewritten_query, "rag.tenant_id": tenant_id, "rag.top_k": top_k},
+        ):
+            fused_hits: list[SearchHit] = self.store.hybrid_search(
+                tenant_id=tenant_id,
+                query_text=processed.rewritten_query,
+                query_vector=query_vector,
+                top_k=top_k * 3,  # Over-fetch for reranking and deduplication
+                alpha=alpha,
+                tickers=tickers,
+                doc_types=doc_types,
+                fiscal_years=fiscal_years,
+                user_permissions=user_permissions,
+            )
+        retrieval_dur = time.perf_counter() - retrieval_start
 
         # Step 8: Reranking
-        reranked_hits: list[SearchHit] = await self.reranker.rerank(
-            query=processed.rewritten_query,
-            hits=fused_hits,
-            top_k=top_k * 2,
-        )
+        rerank_start = time.perf_counter()
+        with default_tracer.start_as_current_span(
+            "rag.reranker",
+            kind=SpanKind.INTERNAL,
+            attributes={"rag.candidate_count": len(fused_hits)},
+        ):
+            reranked_hits: list[SearchHit] = await self.reranker.rerank(
+                query=processed.rewritten_query,
+                hits=fused_hits,
+                top_k=top_k * 2,
+            )
+        rerank_dur = time.perf_counter() - rerank_start
 
         # Step 9: Deduplication
         deduped_hits: list[SearchHit] = self.deduplicator.deduplicate(reranked_hits, threshold=0.85)
@@ -131,6 +147,14 @@ class RetrievalService:
         context: AssembledContext = self.citation_tracker.build_context(compressed_hits)
 
         latency_ms = (time.perf_counter() - start_time) * 1000.0
+
+        # Record RAG Observability Golden Signals
+        metrics_registry.record_rag_retrieval(
+            retrieval_latency_seconds=retrieval_dur,
+            reranker_latency_seconds=rerank_dur,
+            recall_at_k=1.0 if compressed_hits else 0.0,
+            cache_hit=False,
+        )
 
         return RetrievalResult(
             query=query,

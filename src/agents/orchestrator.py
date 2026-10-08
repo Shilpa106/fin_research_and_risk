@@ -1,6 +1,12 @@
 import logging
 import time
+import uuid
 from typing import Any, cast
+
+from ..observability.context import agent_run_id_ctx
+from ..observability.integrations import langsmith_exporter
+from ..observability.metrics import metrics_registry
+from ..observability.tracing import SpanKind, default_tracer
 
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -271,8 +277,56 @@ class AgentOrchestrator:
 
         tid = thread_id or f"thread-{int(time.time() * 1000)}"
         config = {"configurable": {"thread_id": tid}}
+        agent_run_id = f"run-{uuid.uuid4().hex[:12]}"
+        agent_run_id_ctx.set(agent_run_id)
 
-        final_state = await self.graph.ainvoke(initial_state, config=config)
+        start_time = time.time()
+        with default_tracer.start_as_current_span(
+            "agent.orchestrator",
+            kind=SpanKind.INTERNAL,
+            attributes={
+                "agent.thread_id": tid,
+                "agent.run_id": agent_run_id,
+                "tenant.id": tenant_id,
+            },
+        ) as span:
+            final_state = await self.graph.ainvoke(initial_state, config=config)
+            duration = time.time() - start_time
+
+            iterations = final_state.get("iteration_count", 1)
+            tool_calls = len(final_state.get("tool_results", []))
+            term_reason = final_state.get("termination_reason")
+            is_success = term_reason in (None, "SUCCESS", TerminationReason.SUCCESS.value)
+
+            span.set_attributes({
+                "agent.iterations": iterations,
+                "agent.tool_calls_count": tool_calls,
+                "agent.termination_reason": str(term_reason),
+                "agent.is_success": is_success,
+            })
+
+            # Record Agent Observability Golden Signals
+            metrics_registry.record_agent_execution(
+                duration_seconds=duration,
+                iterations=iterations,
+                tool_calls_count=tool_calls,
+                is_success=is_success,
+                tenant_id=tenant_id,
+            )
+
+            # Capture LangSmith trace
+            langsmith_exporter.capture_run(
+                name="agent.orchestrator",
+                run_type="chain",
+                inputs={"user_request": user_request, "thread_id": tid},
+                outputs={"final_response": final_state.get("final_response"), "termination_reason": term_reason},
+                start_time=start_time,
+                end_time=time.time(),
+                total_tokens=final_state.get("tokens_used", 0),
+                cost_usd=final_state.get("cost_accumulated", 0.0),
+                tenant_id=tenant_id,
+            )
+
         return final_state
 
     async def get_checkpoint(self, thread_id: str) -> Any:

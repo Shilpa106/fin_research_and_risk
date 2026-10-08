@@ -1,7 +1,12 @@
 import asyncio
 import hashlib
 import logging
+import time
 from typing import Any
+
+from ..observability.integrations import langsmith_exporter
+from ..observability.metrics import metrics_registry
+from ..observability.tracing import SpanKind, default_tracer
 
 from ..domain.exceptions import (
     CircuitBreakerOpenException,
@@ -97,6 +102,37 @@ class AIGateway(AIGatewayInterface):
             response.cached,
             response.fallback_used,
             prompt_digest,
+        )
+
+        # Record OpenTelemetry LLM Golden Signals & Accounting
+        metrics_registry.record_llm_call(
+            model=response.model,
+            provider=response.provider,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            duration_seconds=response.latency_ms / 1000.0,
+            cost_usd=response.estimated_cost_usd,
+        )
+
+        # Record Semantic Cache Metrics
+        if response.cached:
+            metrics_registry.rag_cache_hits.inc(1.0)
+        else:
+            metrics_registry.rag_cache_misses.inc(1.0)
+
+        # Record LangSmith-compatible run
+        langsmith_exporter.capture_run(
+            name=f"llm.{response.provider}.{response.model}",
+            run_type="llm",
+            inputs={"prompt_digest": prompt_digest, "request_id": response.request_id},
+            outputs={"output_tokens": response.output_tokens, "cached": response.cached},
+            start_time=time.time() - (response.latency_ms / 1000.0),
+            end_time=time.time(),
+            model=response.model,
+            total_tokens=response.input_tokens + response.output_tokens,
+            cost_usd=response.estimated_cost_usd,
+            trace_id=response.request_id,
+            tenant_id=response.tenant_id,
         )
 
     async def _execute_with_retry(
